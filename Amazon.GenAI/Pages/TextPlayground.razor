@@ -1,0 +1,129 @@
+﻿@page "/text-playground"
+@using Amazon.BedrockRuntime;
+@using Amazon.Bedrock;
+@using Amazon.Bedrock.Model;
+@using LangChain.Providers.Amazon.Bedrock
+@using LangChain.Providers.Amazon.Bedrock.Predefined.Anthropic
+@using System.Reflection
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3">Text Playground</MudText>
+<MudStack>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
+                @if (foundationModels != null)
+                {
+                    @foreach (var item in foundationModels)
+                    {
+                        selectedModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+    <form method="post" @onsubmit="OnSubmit">
+        <MudCard>
+            <MudCardContent>
+                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="prompt" Lines=5 Variant="Variant.Outlined" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </form>
+    <MudCard>
+        <MudCardContent>
+            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@outputText</MudField>
+        </MudCardContent>
+    </MudCard>
+</MudStack>
+@code {
+
+    private IEnumerable<FoundationModelSummary> foundationModels;
+
+    private FoundationModelSummary selectedModel;
+
+    private string outputText;
+    private string prompt;
+
+    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var theList = Assembly.GetAssembly(typeof(BedrockProvider))!.GetTypes()
+            .Where(t => t.Namespace != null && t.Namespace.Contains("LangChain.Providers.Amazon.Bedrock.Predefined"))
+            .ToList();
+
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
+            .Where(x => x.OutputModalities.Contains("TEXT"))
+            .OrderBy(x => x.ProviderName);
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private void OnSubmit()
+    {
+        var provider = new BedrockProvider();
+        var llm = new ClaudeV21Model(provider);
+        var result = llm.GenerateAsync(prompt);
+        outputText = result.Result;
+        StateHasChanged();
+
+        // Prompt prompt = new();
+        // prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+
+        // if (!(selectedModel.ResponseStreamingSupported ))
+        // {
+        //     outputText = "Thinking...";
+        //     var response = await BedrockRuntimeClient.InvokeModelAsync(
+        //         selectedModel.ModelId,
+        //         prompt,
+        //         new()
+        //         {
+        //             { "max_tokens_to_sample", 300 }
+        //         }
+        //     );
+        //     outputText = response.GetResponse();
+        //     StateHasChanged();
+        // }
+        // else
+        // {
+        //     outputText = "";
+        //     await BedrockRuntimeClient.InvokeModelWithResponseStreamAsync(
+        //         selectedModel.ModelId,
+        //         prompt,
+        //         new()
+        //         {
+        //             { "max_tokens_to_sample", 300 }
+        //         },
+        //         ChunkReceived,
+        //         ExceptionReceived
+        //     );
+        // }
+    }
+
+    // private async Task ChunkReceived(string? chunk)
+    // {
+    //     await InvokeAsync(async () =>
+    //     {
+    //         outputText += chunk;
+    //         StateHasChanged();
+    //         await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
+    //     });
+    // }
+
+    // private async Task ExceptionReceived(string? message)
+    // {
+    //     System.Diagnostics.Debug.WriteLine("ExceptionReceived");
+    //     await InvokeAsync(() =>
+    //     {
+    //         outputText += message;
+    //         StateHasChanged();
+    //     });
+    // }
+}
+
