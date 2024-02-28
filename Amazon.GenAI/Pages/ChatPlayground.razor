@@ -1,0 +1,121 @@
+﻿@page "/chat-playground"
+@using Amazon.Bedrock.Model;
+@using Amazon.Bedrock;
+@using Amazon.BedrockRuntime;
+@using System.Text;
+@using LangChain.Memory
+@using LangChain.Providers
+@using LangChain.Providers.Amazon.Bedrock
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3">Chat Playground</MudText>
+<MudStack>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="_selectedModel" ToStringFunc="@_selectConverter" Required="true">
+                @if (_foundationModels != null)
+                {
+                    foreach (var item in _foundationModels)
+                    {
+                        _selectedModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+    <MudCard>
+        <MudCardContent>
+            <MudTimeline Reverse=true>
+                @foreach (var item in _chatMessageHistory.Messages)
+                {
+                    string label = item.Role == MessageRole.Human ? "Human" : "Assistant";
+                    <MudTimelineItem>
+                        <MudField Label="@label" Class="white-space-pre-line">@item.Content</MudField>
+                    </MudTimelineItem>
+                }
+                <MudTimelineItem>
+                    <MudTextField id="PromptId" @ref="_promptField" T="string" ValueChanged="@OnPromptChanged" Label="Human"></MudTextField>
+                </MudTimelineItem>
+            </MudTimeline>
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Class="ml-auto" Disabled="@_isThinking" Variant="Variant.Filled" Color="Color.Primary" OnClick="Reset">
+                @if (_isThinking)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Thinking...</MudText>
+                }
+                else
+                {
+                    <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Replay" Size="Size.Small"></MudIcon>
+                    <MudText Class="ms-2">Reset</MudText>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudStack>
+
+
+@code {
+
+    private readonly ChatMessageHistory _chatMessageHistory = new ChatMessageHistory();
+
+    private bool _isThinking;
+   
+    private MudTextField<string>? _promptField;
+  
+    private IEnumerable<FoundationModelSummary>? _foundationModels;
+
+    private FoundationModelSummary? _selectedModel;
+
+    readonly Func<FoundationModelSummary, string> _selectConverter = fms => string.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var allModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
+            .Where(x => x.OutputModalities.Contains("TEXT"))
+            .OrderBy(x => x.ProviderName);
+        _foundationModels = Constants.ListValidModels(allModels)!;
+
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task Reset(MouseEventArgs e)
+    {
+        await _promptField?.SetText("")!;
+        await _chatMessageHistory.Clear();
+    }
+
+    private async Task OnPromptChanged(string inputValue)
+    {
+        if (string.IsNullOrEmpty(inputValue))
+            return;
+
+        _isThinking = true;
+        StateHasChanged();
+        await Task.Delay(1);
+
+        ChatMessageHistory prompt = new();
+        foreach (var message in _chatMessageHistory.Messages)
+        {
+            await prompt.AddMessage(message);
+        }
+        await prompt.AddUserMessage(inputValue);
+
+        var llm = Constants.GetChatModelTypeById(_selectedModel?.ModelId!);
+        var chatRequest = new ChatRequest { Messages = prompt.Messages };
+        var result = llm.GenerateAsync(chatRequest);
+
+        await _chatMessageHistory.AddUserMessage(inputValue);
+        await _chatMessageHistory.AddAiMessage(result.Result);
+
+        await _promptField?.SetText("")!;
+        _isThinking = false;
+        StateHasChanged();
+        await Task.Delay(1);
+    }
+}

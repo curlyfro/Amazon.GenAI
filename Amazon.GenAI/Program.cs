@@ -10,6 +10,8 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 builder.Services.AddMudServices();
+builder.Services.AddSpeechRecognitionServices();
+builder.Services.AddSpeechSynthesisServices();
 
 builder.Services.AddSingleton<AmazonBedrockRuntimeClient>(
     new AmazonBedrockRuntimeClient(new AmazonBedrockRuntimeConfig()

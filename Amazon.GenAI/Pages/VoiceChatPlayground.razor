@@ -1,0 +1,150 @@
+﻿@page "/voicechat-playground"
+@using Amazon.Bedrock.Model;
+@using Amazon.Bedrock;
+@using Amazon.BedrockRuntime;
+@using LangChain.Memory
+@using LangChain.Providers
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+@inject ISpeechRecognitionService recognitionService
+@inject ISpeechSynthesisService synthesisService
+
+<MudText Typo="Typo.h3">Voice Chat Playground</MudText>
+<MudStack>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="_selectedModel" ToStringFunc="@_selectConverter" Required="true">
+                @if (_foundationModels != null)
+                {
+                    foreach (var item in _foundationModels)
+                    {
+                        _selectedModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+<MudCard>
+    <MudCardContent>
+        <MudTimeline Reverse=true>
+                @foreach (var item in _chatMessageHistory.Messages)
+            {
+                    string label = item.Role == MessageRole.Human ? "Human" : "Assistant";
+                    <MudTimelineItem>
+                    <MudField Label="@label" Class="white-space-pre-line">@item.Content</MudField>
+                </MudTimelineItem>
+            }
+            <MudTimelineItem>
+                <MudTextField id="PromptId" @ref="_promptField" T="string" ValueChanged="@OnPromptChanged" Label="User"></MudTextField>
+            </MudTimelineItem>
+        </MudTimeline>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Class="ml-auto" Disabled="@_isListening" Variant="Variant.Filled" Color="Color.Primary" OnClick="StartSpeechRecognition">
+            @if(_isListening)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Listening</MudText>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Mic" Size="Size.Small"></MudIcon>
+                <MudText>Talk</MudText>
+            }
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+</MudStack>
+
+
+@code {
+    private System.Timers.Timer _timer = new System.Timers.Timer(100);
+
+    private readonly ChatMessageHistory _chatMessageHistory = new ChatMessageHistory();
+    
+    private bool _isListening = false;
+
+    private MudTextField<string>? _promptField;
+  
+    private IEnumerable<FoundationModelSummary>? _foundationModels;
+
+    private FoundationModelSummary? _selectedModel;
+
+    readonly Func<FoundationModelSummary, string> _selectConverter = fms => string.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var allModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
+            .Where(x => x.OutputModalities.Contains("TEXT"))
+            .OrderBy(x => x.ProviderName);
+        _foundationModels = Constants.ListValidModels(allModels)!;
+
+        _timer.Elapsed += OnElapsed;
+
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async void OnElapsed(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        if (!synthesisService.Speaking.Result)
+        {
+            _timer.Stop();
+            _isListening = true;
+            IDisposable recognitionServiceDisposable = await recognitionService.RecognizeSpeechAsync("en-us", OnRecognized);
+            await this.InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StartSpeechRecognition(MouseEventArgs e)
+    {
+        _isListening = true;
+        IDisposable recognitionServiceDisposable = await recognitionService.RecognizeSpeechAsync("en-us", OnRecognized);
+    }
+
+    private async Task OnRecognized(string e)
+    {
+        await recognitionService.CancelSpeechRecognitionAsync(true);
+        await _promptField.SetText(e);
+    }
+
+    private async Task OnPromptChanged(string inputValue)
+    {
+        if (string.IsNullOrEmpty(inputValue))
+            return;
+
+        ChatMessageHistory prompt = new();
+        foreach (var message in _chatMessageHistory.Messages)
+        {
+            await prompt.AddMessage(message);
+        }
+        await prompt.AddUserMessage(inputValue);
+
+        var llm = Constants.GetChatModelTypeById(_selectedModel?.ModelId!);
+        var chatRequest = new ChatRequest { Messages = prompt.Messages };
+        var result = llm.GenerateAsync(chatRequest);
+
+        await _chatMessageHistory.AddUserMessage(inputValue);
+        await _chatMessageHistory.AddAiMessage(result.Result);
+
+        string outputText = result.Result;
+
+        var utterance = new SpeechSynthesisUtterance
+        {
+            Lang = "en-us",
+            Text = outputText
+        };
+
+        await synthesisService.SpeakAsync(utterance);
+        _isListening = false;
+        _timer.Start();
+
+        await _promptField?.SetText("")!;
+        StateHasChanged();
+        await Task.Delay(1);
+
+        await JS.InvokeVoidAsync("scrollToElement", "PromptId");
+    }
+}

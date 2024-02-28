@@ -2,9 +2,8 @@
 @using Amazon.BedrockRuntime;
 @using Amazon.Bedrock;
 @using Amazon.Bedrock.Model;
+@using LangChain.Providers
 @using LangChain.Providers.Amazon.Bedrock
-@using LangChain.Providers.Amazon.Bedrock.Predefined.Anthropic
-@using System.Reflection
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -13,117 +12,123 @@
 <MudStack>
     <MudCard>
         <MudCardContent>
-            <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
-                @if (foundationModels != null)
-                {
-                    @foreach (var item in foundationModels)
+            <MudGrid>
+                <MudItem xs="9">
+                    <MudSelect T="FoundationModelSummary" @bind-Value="_selectedModel" ToStringFunc="@_selectConverter" Required="true">
+                        @if (_foundationModels != null)
+                        {
+                            @foreach (var item in _foundationModels)
+                            {
+                                _selectedModel ??= item;
+                                <MudSelectItem Value="@item" />
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="3">
+                    @if (_selectedModel is { ResponseStreamingSupported: true })
                     {
-                        selectedModel ??= item;
-                        <MudSelectItem Value="@item" />
+                        <MudSwitch @bind-Value="@StreamResponse" Label="Stream Response" Color="Color.Success" />
                     }
-                }
-            </MudSelect>
+                </MudItem>
+            </MudGrid>
         </MudCardContent>
     </MudCard>
     <form method="post" @onsubmit="OnSubmit">
         <MudCard>
             <MudCardContent>
-                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="prompt" Lines=5 Variant="Variant.Outlined" />
+                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="_prompt" Lines=5 Variant="Variant.Outlined" />
             </MudCardContent>
             <MudCardActions>
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Disabled="@_isThinking" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">
+                    @if (_isThinking)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Thinking...</MudText>
+                    }
+                    else
+                    {
+                        <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Forward" Size="Size.Small"></MudIcon>
+                        <MudText Class="ms-2">Submit</MudText>
+                    }
+                </MudButton>
             </MudCardActions>
         </MudCard>
     </form>
     <MudCard>
         <MudCardContent>
-            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@outputText</MudField>
+            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@_outputText</MudField>
         </MudCardContent>
     </MudCard>
 </MudStack>
+
 @code {
 
-    private IEnumerable<FoundationModelSummary> foundationModels;
+    private IEnumerable<FoundationModelSummary>? _foundationModels;
 
-    private FoundationModelSummary selectedModel;
+    private FoundationModelSummary? _selectedModel;
 
-    private string outputText;
-    private string prompt;
+    private string? _outputText;
+    private string? _prompt;
 
-    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
+    private bool _isThinking;
+
+    private bool StreamResponse { get; set; }
+
+    readonly Func<FoundationModelSummary, string> _selectConverter = fms => string.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
 
     protected override async Task OnInitializedAsync()
     {
-        var theList = Assembly.GetAssembly(typeof(BedrockProvider))!.GetTypes()
-            .Where(t => t.Namespace != null && t.Namespace.Contains("LangChain.Providers.Amazon.Bedrock.Predefined"))
-            .ToList();
+        var allModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
+                    .Where(x => x.OutputModalities.Contains("TEXT"))
+                    .OrderBy(x => x.ProviderName);
 
-        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
-            .Where(x => x.OutputModalities.Contains("TEXT"))
-            .OrderBy(x => x.ProviderName);
+        _foundationModels = Constants.ListValidModels(allModels);
+
         await base.OnInitializedAsync();
         StateHasChanged();
     }
 
-    private void OnSubmit()
+    private async Task OnSubmit()
     {
-        var provider = new BedrockProvider();
-        var llm = new ClaudeV21Model(provider);
-        var result = llm.GenerateAsync(prompt);
-        outputText = result.Result;
+        _isThinking = true;
+        _outputText = "";
         StateHasChanged();
+        await Task.Delay(1);
 
-        // Prompt prompt = new();
-        // prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+        var llm = Constants.GetChatModelTypeById(_selectedModel?.ModelId!);
+        var result = llm.GenerateAsync(_prompt!, new BedrockChatSettings { UseStreaming = StreamResponse });
 
-        // if (!(selectedModel.ResponseStreamingSupported ))
-        // {
-        //     outputText = "Thinking...";
-        //     var response = await BedrockRuntimeClient.InvokeModelAsync(
-        //         selectedModel.ModelId,
-        //         prompt,
-        //         new()
-        //         {
-        //             { "max_tokens_to_sample", 300 }
-        //         }
-        //     );
-        //     outputText = response.GetResponse();
-        //     StateHasChanged();
-        // }
-        // else
-        // {
-        //     outputText = "";
-        //     await BedrockRuntimeClient.InvokeModelWithResponseStreamAsync(
-        //         selectedModel.ModelId,
-        //         prompt,
-        //         new()
-        //         {
-        //             { "max_tokens_to_sample", 300 }
-        //         },
-        //         ChunkReceived,
-        //         ExceptionReceived
-        //     );
-        // }
+        if (_selectedModel!.ResponseStreamingSupported)
+        {
+            llm.PartialResponseGenerated += (o, s) => ChunkReceived(o, s);
+            llm.CompletedResponseGenerated += (o, s) => Completed(o, s);
+        }
+        else
+        {
+            await Completed(null, result.Result);
+        }
     }
 
-    // private async Task ChunkReceived(string? chunk)
-    // {
-    //     await InvokeAsync(async () =>
-    //     {
-    //         outputText += chunk;
-    //         StateHasChanged();
-    //         await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
-    //     });
-    // }
+    private async Task Completed(object? sender, string? text)
+    {
+        await InvokeAsync(() =>
+        {
+            _isThinking = false;
+            _outputText = text;
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
+    }
 
-    // private async Task ExceptionReceived(string? message)
-    // {
-    //     System.Diagnostics.Debug.WriteLine("ExceptionReceived");
-    //     await InvokeAsync(() =>
-    //     {
-    //         outputText += message;
-    //         StateHasChanged();
-    //     });
-    // }
+    private async Task ChunkReceived(object? sender, string chunk)
+    {
+        await InvokeAsync(() =>
+        {
+            _outputText += chunk;
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
+    }
 }
 
