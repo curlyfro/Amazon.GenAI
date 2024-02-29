@@ -25,7 +25,7 @@ public static class Constants
         return model;
     }
 
-    public static IImageGenerationModel GetImageModelTypeById(string modelId)
+    public static ITextToImageModel GetImageModelTypeById(string modelId)
     {
         modelId = modelId.ToLower() ?? throw new ArgumentNullException(nameof(modelId));
 
@@ -36,7 +36,7 @@ public static class Constants
 
         var provider = new BedrockProvider();
         object[] args = { provider };
-        var model = (IImageGenerationModel)Activator.CreateInstance(type, args)!;
+        var model = (ITextToImageModel)Activator.CreateInstance(type, args)!;
 
         return model;
     }

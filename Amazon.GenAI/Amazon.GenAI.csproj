@@ -7,6 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="bin\**" />
+    <Content Remove="bin\**" />
+    <EmbeddedResource Remove="bin\**" />
+    <None Remove="bin\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AWSSDK.Bedrock" Version="3.7.301.41" />
     <PackageReference Include="AWSSDK.BedrockAgentRuntime" Version="3.7.300.41" />
     <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.301.41" />
@@ -18,15 +25,19 @@
   <ItemGroup>
     <Reference Include="LangChain.Core">
       <HintPath>..\..\LangChain\src\Core\src\bin\Debug\net8.0\LangChain.Core.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="LangChain.Providers.Abstractions">
       <HintPath>..\..\LangChain\src\Providers\Amazon.Bedrock\src\bin\Debug\net8.0\LangChain.Providers.Abstractions.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="LangChain.Providers.Amazon.Bedrock">
       <HintPath>..\..\LangChain\src\Providers\Amazon.Bedrock\src\bin\Debug\net8.0\LangChain.Providers.Amazon.Bedrock.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="LangChain.Splitters.Abstractions">
       <HintPath>..\..\LangChain\src\Providers\Amazon.Bedrock\src\bin\Debug\net8.0\LangChain.Splitters.Abstractions.dll</HintPath>
+      <Private>True</Private>
     </Reference>
   </ItemGroup>
 

@@ -3,6 +3,7 @@
 @using System.Text;
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
+@using LangChain.Providers
 @using LangChain.Providers.Amazon.Bedrock
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
@@ -45,16 +46,16 @@
             </MudCardActions>
         </MudCard>
     </form>
-    @if (_imageSrc != String.Empty)
+    @foreach (var imageSrc in _listBase64Images)
     {
         <MudPaper id="ImageId" Class="d-flex justify-center">
-            <MudImage Class="pa-4" Src="@_imageSrc"></MudImage>
+            <MudImage Class="pa-4" Src="@imageSrc"></MudImage>
         </MudPaper>
     }
 </MudStack>
 
 @code {
-    private string _imageSrc = "";
+    private readonly List<string> _listBase64Images = new();
 
     private bool _isThinking;
 
@@ -79,6 +80,7 @@
 
     private async Task OnSubmit()
     {
+        _listBase64Images.Clear();
         _isThinking = true;
         StateHasChanged();
         await Task.Delay(1);
@@ -86,10 +88,12 @@
         var rand = new Random();
 
         var llm = Constants.GetImageModelTypeById(_selectedModel?.ModelId!);
-        var result = llm.GenerateImageAsync(_prompt, new BedrockImageSettings { Seed = rand.Next() });
-        var base64String = Convert.ToBase64String(result.Result.Bytes);
+        var result = llm.GenerateImageAsync(_prompt, new BedrockImageSettings { Seed = rand.Next(), NumOfImages = 3});
+        foreach (var data in result.Result.Images)
+        {
+            _listBase64Images.Add($"data:image/jpeg;base64,{data.ToBase64()}");
+        }
 
-        _imageSrc = $"data:image/jpeg;base64,{base64String}";
         _isThinking = false;
         StateHasChanged();
         await JS.InvokeVoidAsync("scrollToElement", "ImageId");
