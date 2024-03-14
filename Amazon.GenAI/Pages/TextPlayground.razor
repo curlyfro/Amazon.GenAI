@@ -96,7 +96,7 @@
         StateHasChanged();
         await Task.Delay(1);
 
-        var llm = Constants.GetChatModelTypeById(_selectedModel?.ModelId!);
+        var llm = Constants.GetModelTypeById<ChatModel>(_selectedModel?.ModelId!);
         var result = llm.GenerateAsync(_prompt!, new BedrockChatSettings { UseStreaming = StreamResponse });
 
         if (_selectedModel!.ResponseStreamingSupported)

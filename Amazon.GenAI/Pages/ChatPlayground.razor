@@ -2,10 +2,11 @@
 @using Amazon.Bedrock.Model;
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
-@using System.Text;
-@using LangChain.Memory
+@using LangChain.Chains.HelperChains
 @using LangChain.Providers
-@using LangChain.Providers.Amazon.Bedrock
+@using LangChain.Memory;
+@using static LangChain.Chains.Chain;
+
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -14,7 +15,7 @@
 <MudStack>
     <MudCard>
         <MudCardContent>
-            <MudSelect T="FoundationModelSummary" @bind-Value="_selectedModel" ToStringFunc="@_selectConverter" Required="true">
+            <MudSelect T="FoundationModelSummary" @bind-Value="_selectedModel" @bind-Value:after="ModelChanged" ToStringFunc="@_selectConverter" Required="true">
                 @if (_foundationModels != null)
                 {
                     foreach (var item in _foundationModels)
@@ -60,18 +61,23 @@
 
 
 @code {
-
-    private readonly ChatMessageHistory _chatMessageHistory = new ChatMessageHistory();
+    private readonly ChatMessageHistory _chatMessageHistory = new();
 
     private bool _isThinking;
-   
+
     private MudTextField<string>? _promptField;
-  
+
     private IEnumerable<FoundationModelSummary>? _foundationModels;
 
     private FoundationModelSummary? _selectedModel;
 
     readonly Func<FoundationModelSummary, string> _selectConverter = fms => string.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
+    
+    private static BaseChatMessageHistory GetChatMessageHistory() => new ChatMessageHistory();
+
+    string? _template;
+
+    StackChain? _chain;
 
     protected override async Task OnInitializedAsync()
     {
@@ -79,6 +85,13 @@
             .Where(x => x.OutputModalities.Contains("TEXT"))
             .OrderBy(x => x.ProviderName);
         _foundationModels = Constants.ListValidModels(allModels)!;
+
+        _template = @"
+The following is a friendly conversation between a human and an AI.
+
+{history}
+Human: {input}
+AI: ";
 
         await base.OnInitializedAsync();
         StateHasChanged();
@@ -99,23 +112,49 @@
         StateHasChanged();
         await Task.Delay(1);
 
-        ChatMessageHistory prompt = new();
-        foreach (var message in _chatMessageHistory.Messages)
-        {
-            await prompt.AddMessage(message);
-        }
-        await prompt.AddUserMessage(inputValue);
+        var currentChain = Set(inputValue, "input")
+                           | _chain!;
 
-        var llm = Constants.GetChatModelTypeById(_selectedModel?.ModelId!);
-        var chatRequest = new ChatRequest { Messages = prompt.Messages };
-        var result = llm.GenerateAsync(chatRequest);
+        var response = await currentChain.Run("text");
 
         await _chatMessageHistory.AddUserMessage(inputValue);
-        await _chatMessageHistory.AddAiMessage(result.Result);
+        await _chatMessageHistory.AddAiMessage(response!);
 
         await _promptField?.SetText("")!;
         _isThinking = false;
         StateHasChanged();
         await Task.Delay(1);
     }
+
+    private async Task ModelChanged()
+    {
+        await Reset(null!);
+
+        var llm = Constants.GetModelTypeById<ChatModel>(_selectedModel?.ModelId!);
+        var memory = UseConversationWindowMemoryStrategy(llm);
+
+        _chain =
+            LoadMemory(memory, outputKey: "history")
+            | Template(_template!)
+            | LLM(llm)
+            | UpdateMemory(memory, requestKey: "input", responseKey: "text");
+    }
+
+    private static BaseChatMemory UseConversationWindowMemoryStrategy(IChatModel model)
+    {
+        var messageFormatter = new MessageFormatter
+            {
+                AiPrefix = "AI",
+                HumanPrefix = "Human"
+            };
+
+        var chatHistory = GetChatMessageHistory();
+
+        return new ConversationWindowBufferMemory(chatHistory)
+            {
+                WindowSize = 3,
+                Formatter = messageFormatter
+            };
+    }
+
 }

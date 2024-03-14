@@ -16,9 +16,12 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.Bedrock" Version="3.7.301.41" />
     <PackageReference Include="AWSSDK.BedrockAgentRuntime" Version="3.7.300.41" />
-    <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.301.41" />
+    <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.301.43" />
     <PackageReference Include="Blazor.SpeechRecognition" Version="8.0.0" />
     <PackageReference Include="Blazor.SpeechSynthesis" Version="8.0.0" />
+    <PackageReference Include="LangChain.Core" Version="0.13.0" />
+    <PackageReference Include="LangChain.Providers.Abstractions" Version="0.13.0" />
+    <PackageReference Include="LangChain.Providers.Amazon.Bedrock" Version="0.13.0" />
     <PackageReference Include="MudBlazor" Version="6.16.0" />
   </ItemGroup>
 

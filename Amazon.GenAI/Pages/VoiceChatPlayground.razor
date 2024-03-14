@@ -122,7 +122,7 @@
         }
         await prompt.AddUserMessage(inputValue);
 
-        var llm = Constants.GetChatModelTypeById(_selectedModel?.ModelId!);
+        var llm = Constants.GetModelTypeById<ChatModel>(_selectedModel?.ModelId!);
         var chatRequest = new ChatRequest { Messages = prompt.Messages };
         var result = llm.GenerateAsync(chatRequest);
 

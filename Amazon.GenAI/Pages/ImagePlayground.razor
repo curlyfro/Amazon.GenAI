@@ -1,6 +1,5 @@
 ﻿@page "/image-playground"
 @using Amazon.Bedrock.Model;
-@using System.Text;
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
 @using LangChain.Providers
@@ -87,7 +86,7 @@
 
         var rand = new Random();
 
-        var llm = Constants.GetImageModelTypeById(_selectedModel?.ModelId!);
+        var llm = Constants.GetModelTypeById<ITextToImageModel>(_selectedModel?.ModelId!);
         var result = llm.GenerateImageAsync(_prompt, new BedrockImageSettings { Seed = rand.Next(), NumOfImages = 3});
         foreach (var data in result.Result.Images)
         {

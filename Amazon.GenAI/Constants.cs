@@ -9,23 +9,7 @@ public static class Constants
 {
     private const string Predefined = "LangChain.Providers.Amazon.Bedrock.Predefined";
 
-    public static ChatModel GetChatModelTypeById(string modelId)
-    {
-        modelId = modelId.ToLower() ?? throw new ArgumentNullException(nameof(modelId));
-            
-        var typeNameSpace = GetTypeNameSpaceById(modelId);
-
-        var type = Assembly.GetAssembly(typeof(BedrockProvider))!.GetType(typeNameSpace);
-        type = type ?? throw new ArgumentNullException(nameof(type));
-
-        var provider = new BedrockProvider();
-        object[] args = { provider };
-        var model = (ChatModel)Activator.CreateInstance(type, args)!;
-
-        return model;
-    }
-
-    public static ITextToImageModel GetImageModelTypeById(string modelId)
+    public static T GetModelTypeById<T>(string modelId)
     {
         modelId = modelId.ToLower() ?? throw new ArgumentNullException(nameof(modelId));
 
@@ -36,7 +20,7 @@ public static class Constants
 
         var provider = new BedrockProvider();
         object[] args = { provider };
-        var model = (ITextToImageModel)Activator.CreateInstance(type, args)!;
+        var model = (T)Activator.CreateInstance(type, args)!;
 
         return model;
     }
@@ -55,9 +39,9 @@ public static class Constants
             "amazon.titan-image-generator-v1" => $"{Predefined}.Amazon.TitanImageGeneratorV1Model",
 
             "anthropic.claude-instant-v1" => $"{Predefined}.Anthropic.ClaudeInstantV1Model",
-            "anthropic.claude-v1" => $"{Predefined}.Anthropic.ClaudeV1Model",
             "anthropic.claude-v2" => $"{Predefined}.Anthropic.ClaudeV2Model",
             "anthropic.claude-v2:1" => $"{Predefined}.Anthropic.ClaudeV21Model",
+            "anthropic.claude-3-sonnet-20240229-v1:0" => $"{Predefined}.Anthropic.Claude3SonnetModel",
 
             "cohere.command-text-v14" => $"{Predefined}.Cohere.CommandTextV14Model",
             "cohere.command-light-text-v14" => $"{Predefined}.Cohere.CommandLightTextV14Model",
@@ -69,6 +53,9 @@ public static class Constants
 
             "stability.stable-diffusion-xl-v0" => $"{Predefined}.Stability.StableDiffusionExtraLargeV0Model",
             "stability.stable-diffusion-xl-v1" => $"{Predefined}.Stability.StableDiffusionExtraLargeV1Model",
+
+            "mistral.mistral-7b-instruct-v0:2" => $"{Predefined}.Mistral.Mistral7BInstruct",
+            "mistral.mixtral-8x7b-instruct-v0:1" => $"{Predefined}.Mistral.Mistral8x7BInstruct",
 
             _ => ""
         };
