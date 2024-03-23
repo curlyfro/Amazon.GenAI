@@ -87,7 +87,7 @@
         var rand = new Random();
 
         var llm = Constants.GetModelTypeById<ITextToImageModel>(_selectedModel?.ModelId!);
-        Task<TextToImageResponse> result = llm.GenerateImageAsync(_prompt, new BedrockImageSettings { Seed = rand.Next(), NumOfImages = 3});
+        var result = llm.GenerateImageAsync(_prompt, new BedrockImageSettings { Seed = rand.Next(), NumOfImages = 3});
         foreach (var data in result.Result.Images)
         {
             _listBase64Images.Add($"data:image/jpeg;base64,{data.ToBase64()}");

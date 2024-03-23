@@ -5,6 +5,7 @@
 @using LangChain.Chains.HelperChains
 @using LangChain.Providers
 @using LangChain.Memory;
+@using Markdig
 @using static LangChain.Chains.Chain;
 
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
@@ -34,7 +35,9 @@
                 {
                     string label = item.Role == MessageRole.Human ? "Human" : "Assistant";
                     <MudTimelineItem>
-                        <MudField Label="@label" Class="white-space-pre-line">@item.Content</MudField>
+                        <MudField Label="@label" Class="white-space-pre-line">
+                            @((MarkupString)Markdown.ToHtml(item.Content!))
+                        </MudField>
                     </MudTimelineItem>
                 }
                 <MudTimelineItem>
@@ -72,7 +75,7 @@
     private FoundationModelSummary? _selectedModel;
 
     readonly Func<FoundationModelSummary, string> _selectConverter = fms => string.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
-    
+
     private static BaseChatMessageHistory GetChatMessageHistory() => new ChatMessageHistory();
 
     string? _template;

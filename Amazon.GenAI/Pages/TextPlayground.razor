@@ -4,9 +4,11 @@
 @using Amazon.Bedrock.Model;
 @using LangChain.Providers
 @using LangChain.Providers.Amazon.Bedrock
+@using Markdig
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
+
 
 <MudText Typo="Typo.h3">Text Playground</MudText>
 <MudStack>
@@ -57,18 +59,19 @@
     </form>
     <MudCard>
         <MudCardContent>
-            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@_outputText</MudField>
+            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">
+                @((MarkupString) Markdown.ToHtml(_outputText!))
+            </MudField>
         </MudCardContent>
     </MudCard>
 </MudStack>
 
 @code {
-
     private IEnumerable<FoundationModelSummary>? _foundationModels;
 
     private FoundationModelSummary? _selectedModel;
 
-    private string? _outputText;
+    private string? _outputText = string.Empty;
     private string? _prompt;
 
     private bool _isThinking;

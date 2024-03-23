@@ -7,6 +7,7 @@
 @using LangChain.Memory
 @using LangChain.Providers
 @using LangChain.Sources
+@using Markdig
 @using static LangChain.Chains.Chain
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -85,7 +86,9 @@
                 {
                     var label = item.Role == MessageRole.Human ? "Human" : "Assistant";
                     <MudTimelineItem>
-                        <MudField Label="@label" Class="white-space-pre-line">@item.Content</MudField>
+                        <MudField Label="@label" Class="white-space-pre-line">
+                            @((MarkupString)Markdown.ToHtml(item.Content!))
+                        </MudField>
                     </MudTimelineItem>
                 }
                 <MudTimelineItem>
