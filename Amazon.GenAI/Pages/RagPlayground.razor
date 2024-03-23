@@ -1,0 +1,363 @@
+﻿@page "/rag-playground"
+@using Amazon.Bedrock;
+@using System.Diagnostics
+@using Amazon.Bedrock.Model
+@using LangChain.Databases.OpenSearch
+@using LangChain.Indexes
+@using LangChain.Memory
+@using LangChain.Providers
+@using LangChain.Sources
+@using static LangChain.Chains.Chain
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4">Retrieval-Augmented Generation (RAG) Playground</MudText>
+<MudStack Style="width: 100%">
+    <MudCard>
+        <MudCardContent>
+            <div class="d-flex">
+                <div class="col-6">
+                    <MudTextField @bind-Value="_openSearchEndpoint" Label="OpenSearch Endpoint" Variant="Variant.Text" />
+                </div>
+                <div class="col-2">
+                    <MudTextField @bind-Value="_indexName" Label="Index Name" Variant="Variant.Text" />
+                </div>
+                <div class="col-2">
+                    <MudTextField @bind-Value="_username" Label="Username" Variant="Variant.Text" />
+                </div>
+                <div class="col-2">
+                    <MudTextField @bind-Value="_password" Label="Password" InputType="@_passwordInput" Variant="Variant.Text"
+                                  Adornment="Adornment.End" AdornmentIcon="@_passwordInputIcon" OnAdornmentClick="ShowPasswordClick" AdornmentAriaLabel="Show Password" />
+                </div>
+            </div>
+        </MudCardContent>
+    </MudCard>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="_embeddingModel" ToStringFunc="@_selectConverter" Required="true">
+                @if (_embeddingModels != null)
+                {
+                    @foreach (var item in _embeddingModels)
+                    {
+                        _embeddingModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+            <MudFileUpload T="IReadOnlyList<IBrowserFile>" Accept=".pdf" OnFilesChanged="OnInputFileChanged" AppendMultipleFiles Hidden="false" Class="flex-1"
+                           MaximumFileCount="50" InputClass="absolute mud-width-full mud-height-full overflow-hidden z-20" InputStyle="opacity:0"
+                           @ondragenter="@SetDragClass" @ondragleave="@ClearDragClass" @ondragend="@ClearDragClass">
+                <ButtonTemplate>
+                    <MudPaper Height="300px" Outlined="true" Class="@_dragClass">
+                        <MudText Typo="Typo.h6">Drag and drop files here or click</MudText>
+                        @foreach (var file in _loadedFiles)
+                        {
+                            <MudChip Color="Color.Dark" Text="@file.Key" />
+                        }
+                    </MudPaper>
+                </ButtonTemplate>
+            </MudFileUpload>
+        </MudCardContent>
+        <EditForm Model="@_chatMessageHistory" OnSubmit="OnSubmit">
+            <MudCard>
+                <MudCardActions>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+                    <MudButton OnClick="Clear" Disabled="@(!_loadedFiles.Any())" Color="Color.Error" Variant="Variant.Filled" Class="ms-3">Clear</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </EditForm>
+    </MudCard>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="_textModel" ToStringFunc="@_selectConverter" Required="true">
+                @if (_textModels != null)
+                {
+                    @foreach (var item in _textModels)
+                    {
+                        _textModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+            <MudTimeline Reverse="true">
+                @foreach (var item in _chatMessageHistory.Messages)
+                {
+                    var label = item.Role == MessageRole.Human ? "Human" : "Assistant";
+                    <MudTimelineItem>
+                        <MudField Label="@label" Class="white-space-pre-line">@item.Content</MudField>
+                    </MudTimelineItem>
+                }
+                <MudTimelineItem>
+                    <MudTextField id="PromptId" @ref="_promptField" T="string" ValueChanged="@OnPromptChanged" Label="Human"></MudTextField>
+                </MudTimelineItem>
+            </MudTimeline>
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Class="ml-auto" Disabled="@(_status > Status.Default)" Variant="Variant.Filled" Color="Color.Primary" OnClick="Reset">
+                @switch (_status)
+                {
+                    case Status.Thinking:
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Thinking...</MudText>
+                        break;
+
+                    case Status.Indexing:
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Indexing Database...</MudText>
+                        break;
+
+                    case Status.Adding:
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Adding Documents...</MudText>
+                        break;
+
+                    case Status.Default:
+                    default:
+                        <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Replay" Size="Size.Small"></MudIcon>
+                        <MudText Class="ms-2">Reset</MudText>
+                        break;
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudStack>
+
+@code {
+
+    #region Variables
+
+    private string? _openSearchEndpoint;
+    private string? _indexName;
+    private string? _username;
+    private string? _password;
+
+    private IEnumerable<FoundationModelSummary>? _embeddingModels;
+    private FoundationModelSummary? _embeddingModel;
+    readonly Func<FoundationModelSummary, string> _selectConverter = fms => string.Concat(fms?.ProviderName, " ", fms?.ModelName, " (", fms?.ModelId, ")");
+
+    private IEnumerable<FoundationModelSummary>? _textModels;
+    private FoundationModelSummary? _textModel;
+
+    bool _isShow;
+    InputType _passwordInput = InputType.Password;
+    string _passwordInputIcon = Icons.Material.Filled.VisibilityOff;
+
+    bool _indexCreated;
+    bool _addedDocuments;
+    private OpenSearchVectorStore? _vectorStore;
+
+    enum Status
+    {
+        Default,
+        Thinking,
+        Indexing,
+        Adding
+    }
+
+    Status _status = Status.Default;
+
+    private readonly ChatMessageHistory _chatMessageHistory = new();
+    private static BaseChatMessageHistory GetChatMessageHistory() => new ChatMessageHistory();
+    private MudTextField<string>? _promptField;
+
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    private string _dragClass = DefaultDragClass;
+    private Dictionary<string, string> _loadedFiles = new();
+
+    string? _uploadDirectory;
+
+    #endregion
+   
+    protected override async Task OnInitializedAsync()
+    {
+        var allModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries;
+        _embeddingModels = Constants.ListValidModels(allModels.Where(x => x.OutputModalities.Contains("EMBEDDING")).OrderBy(x => x.ProviderName));
+        _textModels = Constants.ListValidModels(allModels.Where(x => x.OutputModalities.Contains("TEXT")).OrderBy(x => x.ProviderName));
+
+        _uploadDirectory = Path.Combine(Path.GetTempPath(), "unsafe_uploads");
+        if (Directory.Exists(_uploadDirectory) == false) Directory.CreateDirectory(_uploadDirectory);
+
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnSubmit(EditContext context)
+    {
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.TopCenter;
+
+        if (_indexCreated == false)
+        {
+            _status = Status.Indexing;
+            CreateIndex();
+            _status = Status.Default;
+        }
+
+        if (_addedDocuments == false)
+        {
+            _status = Status.Adding;
+            await AddDocuments().ConfigureAwait(false);
+            _status = Status.Default;
+        }
+    }
+
+    private void CreateIndex()
+    {
+        var options = new OpenSearchVectorStoreOptions
+            {
+                IndexName = _indexName,
+                ConnectionUri = new Uri(_openSearchEndpoint!),
+                Username = _username,
+                Password = _password
+            };
+
+        var embeddings = Constants.GetModelTypeById<IEmbeddingModel>(_embeddingModel?.ModelId!);
+        _vectorStore = new OpenSearchVectorStore(embeddings, options);
+
+        _indexCreated = true;
+    }
+
+    private async Task AddDocuments()
+    {
+        foreach (var pdfSource in _loadedFiles.Select(file => new PdfPigPdfSource(file.Value)))
+        {
+            var documents = await pdfSource.LoadAsync();
+
+            var pages = await _vectorStore!.AddDocumentsAsync(documents);
+            Console.WriteLine("pages: " + pages.Count());
+        }
+
+        _addedDocuments = true;
+    }
+
+    private async Task OnPromptChanged(string question)
+    {
+        if (string.IsNullOrEmpty(question))
+            return;
+
+        if (_indexCreated == false)
+        {
+            _status = Status.Indexing;
+            CreateIndex();
+            _status = Status.Default;
+        }
+
+        _status = Status.Thinking;
+        StateHasChanged();
+        await Task.Delay(1);
+
+        var llm = Constants.GetModelTypeById<IChatModel>(_textModel?.ModelId!);
+        var memory = UseConversationWindowMemoryStrategy(llm);
+        var index = new VectorStoreIndexWrapper(_vectorStore!);
+
+        const string promptText = @"Use the following pieces of context to answer the question at the end. If the answer is not in context then just say that you don't know, don't try to make up an answer. Keep the answer as short as possible.
+
+{context}
+
+Question: {question}
+Helpful Answer:";
+
+        try
+        {
+            await _chatMessageHistory.AddUserMessage(question);
+
+            var chain =
+                Set(question, outputKey: "question")
+                | LoadMemory(memory, outputKey: "history")
+                | RetrieveDocuments(index, inputKey: "question", outputKey: "documents", amount: 10)
+                | StuffDocuments(inputKey: "documents", outputKey: "context")
+                | Template(promptText)
+                | LLM(llm);
+
+            var response = await chain.Run("text");
+            await _chatMessageHistory.AddAiMessage(response!);
+
+            await _promptField?.SetText("")!;
+            _status = Status.Default;
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+    }
+
+    #region Utility Methods
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        const long maxFileSize = 1024L * 1024L * 1024L * 2L;
+
+        ClearDragClass();
+        foreach (var file in e.GetMultipleFiles())
+        {
+            var targetFile = Path.Combine(_uploadDirectory!, file.Name);
+            await using (var outputStream = File.Create(targetFile))
+            {
+                await file.OpenReadStream(maxFileSize).CopyToAsync(outputStream);
+            }
+            _loadedFiles.Add(file.Name, targetFile);
+        }
+    }
+
+    private async Task Clear()
+    {
+        _loadedFiles.Clear();
+        await _chatMessageHistory.Clear();
+        ClearDragClass();
+        await _promptField?.SetText("")!;
+        await Task.Delay(100);
+    }
+
+    private void SetDragClass()
+    {
+        _dragClass = $"{DefaultDragClass} mud-border-primary";
+    }
+
+    private void ClearDragClass()
+    {
+        _dragClass = DefaultDragClass;
+    }
+
+    private async Task Reset(MouseEventArgs e)
+    {
+        await _promptField?.SetText("")!;
+        _loadedFiles = new();
+    }
+
+    void ShowPasswordClick()
+    {
+        @if (_isShow)
+        {
+            _isShow = false;
+            _passwordInputIcon = Icons.Material.Filled.VisibilityOff;
+            _passwordInput = InputType.Password;
+        }
+        else
+        {
+            _isShow = true;
+            _passwordInputIcon = Icons.Material.Filled.Visibility;
+            _passwordInput = InputType.Text;
+        }
+    }
+
+    private static BaseChatMemory UseConversationWindowMemoryStrategy(IChatModel model)
+    {
+        var messageFormatter = new MessageFormatter
+            {
+                AiPrefix = "AI",
+                HumanPrefix = "Human"
+            };
+
+        var chatHistory = GetChatMessageHistory();
+
+        return new ConversationWindowBufferMemory(chatHistory)
+            {
+                WindowSize = 3,
+                Formatter = messageFormatter
+            };
+    }
+
+    #endregion
+}

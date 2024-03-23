@@ -14,21 +14,28 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.Bedrock" Version="3.7.301.41" />
-    <PackageReference Include="AWSSDK.BedrockAgentRuntime" Version="3.7.300.41" />
-    <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.301.43" />
+    <PackageReference Include="AWSSDK.Bedrock" Version="3.7.301.49" />
+    <PackageReference Include="AWSSDK.BedrockAgentRuntime" Version="3.7.301.7" />
+    <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.301.49" />
     <PackageReference Include="Blazor.SpeechRecognition" Version="8.0.0" />
     <PackageReference Include="Blazor.SpeechSynthesis" Version="8.0.0" />
-    <PackageReference Include="LangChain.Core" Version="0.13.0" />
-    <PackageReference Include="LangChain.Providers.Abstractions" Version="0.13.0" />
-    <PackageReference Include="LangChain.Providers.Amazon.Bedrock" Version="0.13.0" />
-    <PackageReference Include="MudBlazor" Version="6.16.0" />
+    <PackageReference Include="Markdig" Version="0.36.2" />
+    <PackageReference Include="MudBlazor" Version="6.19.1" />
+    <PackageReference Include="OpenSearch.Client" Version="1.7.0" />
+    <PackageReference Include="PdfPig" Version="0.1.8" />
+    <PackageReference Include="System.Memory.Data" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="LangChain.Core">
       <HintPath>..\..\LangChain\src\Core\src\bin\Debug\net8.0\LangChain.Core.dll</HintPath>
       <Private>True</Private>
+    </Reference>
+    <Reference Include="LangChain.Databases.OpenSearch">
+      <HintPath>..\..\LangChain\src\Databases\OpenSearch\src\bin\Debug\net8.0\LangChain.Databases.OpenSearch.dll</HintPath>
+    </Reference>
+    <Reference Include="LangChain.Polyfills">
+      <HintPath>..\..\LangChain\src\Databases\OpenSearch\src\bin\Debug\net8.0\LangChain.Polyfills.dll</HintPath>
     </Reference>
     <Reference Include="LangChain.Providers.Abstractions">
       <HintPath>..\..\LangChain\src\Providers\Amazon.Bedrock\src\bin\Debug\net8.0\LangChain.Providers.Abstractions.dll</HintPath>
@@ -37,6 +44,12 @@
     <Reference Include="LangChain.Providers.Amazon.Bedrock">
       <HintPath>..\..\LangChain\src\Providers\Amazon.Bedrock\src\bin\Debug\net8.0\LangChain.Providers.Amazon.Bedrock.dll</HintPath>
       <Private>True</Private>
+    </Reference>
+    <Reference Include="LangChain.Sources.Abstractions">
+      <HintPath>..\..\LangChain\src\Databases\OpenSearch\src\bin\Debug\net8.0\LangChain.Sources.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="LangChain.Sources.Pdf">
+      <HintPath>..\..\LangChain\src\Sources\Pdf\src\bin\Debug\net8.0\LangChain.Sources.Pdf.dll</HintPath>
     </Reference>
     <Reference Include="LangChain.Splitters.Abstractions">
       <HintPath>..\..\LangChain\src\Providers\Amazon.Bedrock\src\bin\Debug\net8.0\LangChain.Splitters.Abstractions.dll</HintPath>

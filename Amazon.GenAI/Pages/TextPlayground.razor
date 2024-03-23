@@ -97,7 +97,7 @@
         await Task.Delay(1);
 
         var llm = Constants.GetModelTypeById<ChatModel>(_selectedModel?.ModelId!);
-        var result = llm.GenerateAsync(_prompt!, new BedrockChatSettings { UseStreaming = StreamResponse });
+        Task<ChatResponse> result = llm.GenerateAsync(_prompt!, new BedrockChatSettings { UseStreaming = StreamResponse });
 
         if (_selectedModel!.ResponseStreamingSupported)
         {

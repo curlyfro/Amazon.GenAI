@@ -76,7 +76,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var allModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
+        IOrderedEnumerable<FoundationModelSummary> allModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries
             .Where(x => x.OutputModalities.Contains("TEXT"))
             .OrderBy(x => x.ProviderName);
         _foundationModels = Constants.ListValidModels(allModels)!;
